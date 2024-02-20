@@ -91,8 +91,17 @@ Here are few rules:
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+library(glmnet)
+library(tidyverse)
+x<- as.matrix(ames_raw_2008 |> select("Neighborhood", "Gr Liv Area" ))
+y<-log(ames_raw_2008$SalePrice)
+lasso<- glmnet(x,y,alpha=1)
+cv <- cv.glmnet(x, y, alpha = 1)
+lambda_best <- cv$lambda.min
+newdata <- as.matrix(ames_raw_2009 |> select("Neighborhood", "Gr Liv Area"))
+predictions <- predict(cv, s = lambda_best, newx = as.matrix(newdata))
+loss <- calc_loss(predictions, ames_raw_2009$SalePrice)
+loss
 ```
 
 Your answer:
@@ -124,8 +133,20 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+bootstrap_function <- function(data, indices) {
+  sample <- data[indices, ] 
+  x <- as.matrix(sample |> select("Neighborhood", "Gr Liv Area"))
+  y <- log(sample$SalePrice)
+  
+  cv <- cv.glmnet(x, y, alpha = 1)
+  lambda_best <- cv$lambda.min
+  
+  newdata <- as.matrix(ames_raw_2009 |> select("Neighborhood", "Gr Liv Area"))
+  predictions <- predict(cv, s = lambda_best, newx = as.matrix(newdata))
+  
+  loss <- calc_loss(predictions, log(ames_raw_2009$SalePrice))
+  return(loss)
+}
 ```
 
 Your answer:
@@ -162,8 +183,8 @@ In this exercise, we will generate simulated data, and will then use this data t
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+x <- c(rnorm(100))
+e <- rnorm(100, mean = 0)
 ```
 
 
@@ -171,8 +192,7 @@ Your code:
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+y = c(x + x^2 + x^3 + e)
 ```
 
 
@@ -180,8 +200,14 @@ Your code:
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+# install.packages("leaps")
+library(leaps)
+data = data.frame(x,x^2,x^3,x^4,x^5,x^6,x^7,x^8,x^9,x^10,y)
+regfit.full = regsubsets(y~., data=data,nvmax = 10)
+reg.summary = summary(regfit.full)
+reg.summary
+plot(reg.summary$cp, xlab="Number of variables", ylab="Cp",type="l")
+points(which.min(reg.summary$cp), reg.summary$cp[which.min(reg.summary$cp)], col = "red", pch = 20)
 ```
 
 Your answer:
@@ -196,8 +222,9 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+regfit.fwd = regsubsets(y~., data = data,nvmax = 10, method = 'forward')
+regfwd.summary = summary(regfit.fwd)
+regfwd.summary
 ```
 
 Your answer:
@@ -212,8 +239,9 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+regfit.bwd = regsubsets(y~.,data = data,nvmax = 10,method = 'backward')
+regbwd.summary = summary(regfit.bwd)
+regbwd.summary
 ```
 
 Your answer:
@@ -228,8 +256,15 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+y2 = x^7+e
+data2 = data.frame(x, x^2, x^3, x^4, x^5, x^6, x^7, x^8, x^9, x^10,y2)
+regfit.full2 = regsubsets(y2~.,data = data2, nvmax = 10)
+reg.summary = summary(regfit.full2)
+X2 = model.matrix(y2~.,data2)[,-1]
+Y2 = data2$y2
+train2 = sample(1:nrow(X2), nrow(X2)/2)
+test2 = (-train2)
+Y2.test = Y2[test2]
 ```
 
 Your answer:
@@ -252,16 +287,21 @@ data(College,package = "ISLR2")
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+training_size <- floor(0.3 * nrow(College))
+training_indices <- sample(1:nrow(College), training_size)
+train <- College[training_indices, ]
+test <- College[-training_indices, ]
 ```
 
 (b) Fit a linear model using least squares on the training set, and report the test error obtained.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+fit1 <- lm(Apps~perc.alumni + Private+Expend, data=train)
+summary(fit1)
+predf1<- predict(fit1, newdata=test)
+test_error<- mean((test$Apps-predf1)^2)
+sqrt(test_error)
 ```
 
 Your answer:
@@ -277,8 +317,17 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+x_train <- model.matrix(Apps ~ perc.alumni + Private + Expend, data = train)[,-1]
+y_train <- train$Apps
+x_test <- model.matrix(Apps ~ perc.alumni + Private + Expend, data = test)[,-1]
+y_test <- test$Apps
+fit_ridge <- glmnet(x_train, y_train, alpha = 0)
+cv_ridge <- cv.glmnet(x_train, y_train, alpha = 0)
+best_lambda <- cv_ridge$lambda.min
+pred_ridge <- predict(cv_ridge, s = best_lambda, newx = x_test)
+test_error_ridge <- mean((y_test - pred_ridge)^2)
+rmse_ridge <- sqrt(test_error_ridge)
+rmse_ridge
 ```
 
 Your answer:
@@ -293,8 +342,13 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+cv_lasso <- cv.glmnet(x_train, y_train, alpha = 1, type.measure = "mse")
+lambda_best <- cv_lasso$lambda.min
+pred_lasso <- predict(cv_lasso, s = lambda_best, newx = x_test)
+test_error_lasso <- mean((y_test - pred_lasso)^2)
+rmse_lasso <- sqrt(test_error_lasso)
+coef_lasso <- coef(cv_lasso, s = lambda_best)
+non_zero_coef <- sum(coef_lasso != 0) - 1 
 ```
 
 Your answer:
@@ -310,8 +364,10 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+# install.packages("pls")
+library(pls)
+pcr_model <- pcr(Apps ~ perc.alumni + Private + Expend, data = train, scale = TRUE, validation = "CV")
+summary(pcr_model)
 ```
 
 Your answer:
@@ -327,8 +383,16 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+pls_model <- plsr(Apps ~ perc.alumni + Private + Expend, data = train, scale = TRUE, validation = "CV")
+summary(pls_model)
+validationplot(pls_model, val.type = "MSEP")
+pred_pls <- predict(pls_model, newdata = test, ncomp = 2)
+test_error_pls <- mean((test$Apps - pred_pls)^2)
+rmse_pls <- sqrt(test_error_pls)
+cat("Test RMSE:", round(rmse_pls, 2), "\n")
+cat("Optimal number of components (M):", 2, "\n")
+
+
 ```
 
 Your answer:
@@ -364,8 +428,16 @@ We have seen that as the number of features used in a model increases, the train
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+n = 1000
+p = 20
+X = matrix(rnorm(n*p), n, p)
+B = sample(-10:10, 20)
+B[1] = 0
+B[10] = 0
+B[12] = 0
+e = rnorm(1000, mean=0, sd=0.1)
+Y = X%*%B + e
+data = data.frame(X, Y)
 ```
 
 Your answer:
@@ -381,8 +453,11 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+indices <- sample(1:n)
+train_indices <- indices[1:100]
+test_indices <- indices[101:1000]
+train_data <- data[train_indices, ]
+test_data <- data[test_indices, ]
 ```
 
 Your answer:
@@ -397,8 +472,11 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+regfit.full <- regsubsets(Y ~ ., data=train_data, nvmax=20)
+reg.summary <- summary(regfit.full)
+train.mse = reg.summary$rss / nrow(train_data)
+plot(1:20, train.mse, xlab = "Number of Variables", ylab = "Training MSE", 
+     main = "Training MSE vs Number of Variables", pch = 19)
 ```
 
 Your answer:
@@ -445,8 +523,13 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+test.mse <- rep(NA, 20)
+for (i in 1:20) {
+  pred <- predict(regfit.full, test_data, id = i)
+  test.mse[i] <- mean((test_data$Y - pred)^2)
+}
+plot(1:20, test.mse, xlab = "Number of Variables", ylab = "Test MSE", 
+     main = "Test MSE vs Number of Variables", pch = 19, type = "b")
 ```
 
 Your answer:
@@ -462,8 +545,23 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+coef.error <- rep(NA, 20)
+for (r in 1:20) {
+  coefi <- coef(regfit.full, id = r)
+  estimated.coef <- rep(0, length(B))
+  names(estimated.coef) <- names(B)
+  estimated.coef[names(coefi)] <- coefi
+  ssd <- sum((B - estimated.coef)^2)
+
+  if (is.finite(ssd)) {
+    coef.error[r] <- sqrt(ssd)
+  } else {
+    coef.error[r] <- NA 
+  }
+}
+finite.coef.error <- coef.error[is.finite(coef.error)]
+plot(1:length(finite.coef.error), finite.coef.error, xlab = "Number of Variables", ylab = "Coefficient Error", main = "Coefficient Error vs Number of Variables", pch = 19, type = "b")
+
 ```
 
 Your answer:
@@ -487,8 +585,24 @@ data(Boston,package = "MASS")
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+coef.error <- rep(NA, 20)
+for (r in 1:20) {
+  coefi <- coef(regfit.full, id = r)
+  estimated.coef <- rep(0, length(B)) 
+  names(estimated.coef) <- names(B)
+  estimated.coef[names(coefi)] <- coefi
+  ssd <- sum((B - estimated.coef)^2)
+
+  if (is.finite(ssd)) {
+    coef.error[r] <- sqrt(ssd)
+  } else {
+    coef.error[r] <- NA 
+  }
+}
+finite.coef.error <- coef.error[is.finite(coef.error)]
+plot(1:length(finite.coef.error), finite.coef.error, xlab = "Number of Variables", ylab = "Coefficient Error", main = "Coefficient Error vs Number of Variables", pch = 19, type = "b")
+
+
 ```
 
 Your answer:
@@ -504,8 +618,12 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+cv.out <- cv.glmnet(X[train_indices,], Y[train_indices], alpha=1)
+bestlam <- cv.out$lambda.min
+lasso.mod <- glmnet(X[train_indices,], Y[train_indices], alpha=1)
+lasso.pred <- predict(lasso.mod, s=bestlam, newx=X[test_indices,])
+test_mse <- mean((lasso.pred - Y[test_indices])^2)
+test_mse
 ```
 
 Your answer:
@@ -521,8 +639,7 @@ Please write your answer in full sentences.
 
 Your code:
 ```{r,echo=TRUE}
-#
-#
+# The lasso model can better interprete the data.
 ```
 
 Your answer:
